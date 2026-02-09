@@ -1,35 +1,50 @@
 from flask import Flask, request, render_template
-from flask_sqlalchemy import SQLAlchemy
 import os
+from sqlalchemy.exc import IntegrityError
+
 from data_models import db, Author, Book
+from datetime import datetime
+
 
 app = Flask(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'data/library.sqlite')}"
+
 db.init_app(app)
 
+def parse_date(date_str: str):
+    """
+    Expects 'YYYY-MM-DD' from HTML <input type="date">
+    Returns datetime.date or None.
+    """
+    date_str = (date_str or "").strip()
+    if not date_str:
+        return None
+    return datetime.strptime(date_str, "%Y-%m-%d").date()
 
-with app.app_context():
-  db.create_all()
 
 @app.route("/")
 def home():
-    books = Book.query.order_by(Book.title).all()
-    return render_template("home.html", books=books)
+    # Books and Authors sorted to title
+    books = Book.query.join(Author).order_by(Book.title.asc()).all()
+    return render_template("home.html", books=books, sort_key="title")
 
 @app.route("/add_author", methods=["GET", "POST"])
 def add_author():
-    success_message = None
+    message = None
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        birth_date = request.form.get("birth_date", "").strip()
-        date_of_death = request.form.get("date_of_death", "").strip()
+        birth_date_str = request.form.get("birth_date", "").strip()
+        date_of_death_str = request.form.get("date_of_death", "").strip()
 
-        if not name or not birth_date:
-            success_message = "Please fill in at least name and birth date."
-            return render_template("add_author.html", message=success_message)
+        if not name or not birth_date_str:
+            message = "Please fill in at least name and birth date."
+            return render_template("add_author.html", message=message)
+
+        birth_date = parse_date(birth_date_str)
+        date_of_death = parse_date(date_of_death_str)
 
         new_author = Author(
             name=name,
@@ -39,43 +54,65 @@ def add_author():
 
         db.session.add(new_author)
         db.session.commit()
+        message = f"Author '{new_author.name}' was added successfully ✅"
 
-        success_message = f"Author '{new_author.name}' was added successfully ✅"
-
-    return render_template("add_author.html", message=success_message)
+    return render_template("add_author.html", message=message)
 
 @app.route("/add_book", methods=["GET", "POST"])
 def add_book():
-    success_message = None
+    message = None
 
     # Authors for loading dropdown.
-    authors = Author.query.order_by(Author.name).all()
+    authors = Author.query.order_by(Author.name.asc()).all()
 
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         isbn = request.form.get("isbn", "").strip()
-        publication_year = request.form.get("publication_year", "").strip()
-        author_id = request.form.get("author_id", "").strip()
+        publication_year_str = request.form.get("publication_year", "").strip()
+        author_id_str = request.form.get("author_id", "").strip()
 
-        if not title or not isbn or not author_id:
-            success_message = "Please fill in title, ISBN, and choose an author."
-            return render_template("add_book.html", message=success_message, authors=authors)
+        if not title or not isbn or not publication_year_str or not author_id_str:
+            message = "Please fill in title, ISBN, publication year, and choose an author."
+            return render_template("add_book.html", message=message, authors=authors)
+
+        try:
+            publication_year = int(publication_year_str)
+            author_id = int(author_id_str)
+        except ValueError:
+            message = "Publication year and author must be valid numbers."
+            return render_template("add_book.html", message=message, authors=authors)
 
         new_book = Book(
             title=title,
             isbn=isbn,
             publication_year=publication_year,
-            author_id = int(author_id)
+            author_id=author_id
         )
 
         db.session.add(new_book)
-        db.session.commit()
 
-        success_message = f"Book '{new_book.title}' was added successfully ✅"
+        try:
+            db.session.commit()
+            message = f"Book '{new_book.title}' was added successfully ✅"
+        except IntegrityError:
+            db.session.rollback()
+            message = "This ISBN already exists. Please use a unique ISBN."
+    return render_template("add_book.html", message=message, authors=authors)
 
-    return render_template("add_book.html", message=success_message, authors=authors)
+@app.route("/sort/<sort_key>")
+def sort_books(sort_key):
+    # At least title and author.
+    if sort_key == "title":
+        books = Book.query.join(Author).order_by(Book.title.asc()).all()
+    elif sort_key == "author":
+        books = Book.query.join(Author).order_by(Author.name.asc(), Book.title.asc()).all()
+    else:
+        books = Book.query.join(Author).order_by(Book.title.asc()).all()
 
-
+    return render_template("home.html", books=books, sort_key=sort_key)
 
 if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
+
     app.run(debug=True)

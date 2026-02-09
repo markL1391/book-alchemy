@@ -8,6 +8,13 @@
   <body>
 
     <h1>My Library</h1>
+    <p>
+    Sort:
+    {% if sort_key == "title" %}<strong>Title</strong>{% else %}<a href="/sort/title">Title</a>{% endif %}
+    |
+    {% if sort_key == "author" %}<strong>Author</strong>{% else %}<a href="/sort/author">Author</a>{% endif %}
+    </p>
+
 
     {% if books|length == 0 %}
       <p>No books found. Add some books first.</p>
@@ -17,11 +24,11 @@
           <li style="margin-bottom: 16px;">
             {% if book.isbn %}
               <img
-                src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg"
+                src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg?default=false"
                 alt="Cover for {{ book.title }}"
                 style="height: 120px; vertical-align: middle; margin-right: 12px;"
-                onerror="this.style.display='none';"
-              >
+                onerror="this.onerror=null; this.src='https://books.google.com/books/content?vid=ISBN{{ book.isbn }}&printsec=frontcover&img=1&zoom=1';"
+                />
             {% endif %}
 
             <strong>{{ book.title }}</strong>
