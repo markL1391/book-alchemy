@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, flash
 import os
 from sqlalchemy.exc import IntegrityError
 from data_models import db, Author, Book
@@ -6,6 +6,7 @@ from datetime import datetime
 
 
 app = Flask(__name__)
+app.secret_key = "dev-secret-key"
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'data/library.sqlite')}"
@@ -120,6 +121,21 @@ def sort_books(sort_key):
     # At least title and author.
     q = request.args.get("q", "").strip()
     return redirect(url_for("home", sort=sort_key, q=q))
+
+@app.route("/book/<int:book_id>/delete", methods=["POST"])
+def delete_book(book_id):
+    book = Book.query.get_or_404((book_id))
+    author = book.author
+
+    db.session.delete(book)
+    db.session.commit()
+
+    if Book.query.filter_by(author_id=author.id).count() == 0:
+        db.session.delete(author)
+        db.session.commit()
+
+    flash(f"Book '{book.title}' was deleted successfully ♻️", "success")
+    return redirect(url_for("home"))
 
 if __name__ == "__main__":
     with app.app_context():
