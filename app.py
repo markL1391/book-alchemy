@@ -1,7 +1,6 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, redirect, url_for
 import os
 from sqlalchemy.exc import IntegrityError
-
 from data_models import db, Author, Book
 from datetime import datetime
 
@@ -10,7 +9,7 @@ app = Flask(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'data/library.sqlite')}"
-
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
 def parse_date(date_str: str):
@@ -23,12 +22,29 @@ def parse_date(date_str: str):
         return None
     return datetime.strptime(date_str, "%Y-%m-%d").date()
 
-
 @app.route("/")
 def home():
-    # Books and Authors sorted to title
-    books = Book.query.join(Author).order_by(Book.title.asc()).all()
-    return render_template("home.html", books=books, sort_key="title")
+    q = request.args.get("q", "").strip()
+    sort_key = request.args.get("sort", "title").strip()
+
+    base_query = Book.query.join(Author)
+
+    if q:
+        like = f"%{q}%"
+        base_query = base_query.filter(
+            (Book.title.ilike(like)) | (Author.name.ilike(like))
+        )
+
+    if sort_key == "author":
+        books = base_query.order_by(
+            Author.name.asc(),
+            Book.title.asc()
+        ).all()
+    else:
+        sort_key = "title"
+        books = base_query.order_by(Book.title.asc()).all()
+
+    return render_template("home.html", books=books, q=q, sort_key=sort_key)
 
 @app.route("/add_author", methods=["GET", "POST"])
 def add_author():
@@ -102,14 +118,8 @@ def add_book():
 @app.route("/sort/<sort_key>")
 def sort_books(sort_key):
     # At least title and author.
-    if sort_key == "title":
-        books = Book.query.join(Author).order_by(Book.title.asc()).all()
-    elif sort_key == "author":
-        books = Book.query.join(Author).order_by(Author.name.asc(), Book.title.asc()).all()
-    else:
-        books = Book.query.join(Author).order_by(Book.title.asc()).all()
-
-    return render_template("home.html", books=books, sort_key=sort_key)
+    q = request.args.get("q", "").strip()
+    return redirect(url_for("home", sort=sort_key, q=q))
 
 if __name__ == "__main__":
     with app.app_context():

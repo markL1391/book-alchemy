@@ -1,49 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Library</title>
-  </head>
-  <body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library</title>
+</head>
+<body>
 
-    <h1>My Library</h1>
-    <p>
-    Sort:
-    {% if sort_key == "title" %}<strong>Title</strong>{% else %}<a href="/sort/title">Title</a>{% endif %}
-    |
-    {% if sort_key == "author" %}<strong>Author</strong>{% else %}<a href="/sort/author">Author</a>{% endif %}
-    </p>
+  <h1>My Library</h1>
 
-
-    {% if books|length == 0 %}
-      <p>No books found. Add some books first.</p>
-    {% else %}
-      <ul>
-        {% for book in books %}
-          <li style="margin-bottom: 16px;">
-            {% if book.isbn %}
-              <img
-                src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg?default=false"
-                alt="Cover for {{ book.title }}"
-                style="height: 120px; vertical-align: middle; margin-right: 12px;"
-                onerror="this.onerror=null; this.src='https://books.google.com/books/content?vid=ISBN{{ book.isbn }}&printsec=frontcover&img=1&zoom=1';"
-                />
-            {% endif %}
-
-            <strong>{{ book.title }}</strong>
-            by {{ book.author.name }}
-            {% if book.publication_year %}
-              ({{ book.publication_year }})
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
+  <!-- Search -->
+  <form action="/" method="GET" style="margin-bottom: 16px;">
+    <input type="text" name="q" placeholder="Search title or author..." value="{{ q or '' }}">
+    <input type="hidden" name="sort" value="{{ sort_key or 'title' }}">
+    <button type="submit">Search</button>
+    {% if q %}
+      <a href="/?sort={{ sort_key or 'title' }}">Clear</a>
     {% endif %}
+  </form>
 
-    <p>
-      <a href="/add_author">Add Author</a> | <a href="/add_book">Add Book</a>
-    </p>
+  {% if q and books|length == 0 %}
+    <p>No books match “{{ q }}”.</p>
+  {% endif %}
 
-  </body>
+  <!-- Sort -->
+  <p>
+    Sort:
+    {% if sort_key == "title" %}
+      <strong>Title</strong>
+    {% else %}
+      <a href="/?sort=title{% if q %}&q={{ q }}{% endif %}">Title</a>
+    {% endif %}
+    |
+    {% if sort_key == "author" %}
+      <strong>Author</strong>
+    {% else %}
+      <a href="/?sort=author{% if q %}&q={{ q }}{% endif %}">Author</a>
+    {% endif %}
+  </p>
+
+  {% if books|length == 0 %}
+    <p>No books found. Add some books first.</p>
+  {% else %}
+    <ul>
+      {% for book in books %}
+        <li style="margin-bottom: 16px;">
+          {% if book.isbn %}
+            <img
+              src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg?default=false"
+              alt="Cover for {{ book.title }}"
+              style="height: 120px; vertical-align: middle; margin-right: 12px;"
+              onerror="this.onerror=null; this.src='https://books.google.com/books/content?vid=ISBN{{ book.isbn }}&printsec=frontcover&img=1&zoom=1';"
+            >
+          {% endif %}
+
+          <strong>{{ book.title }}</strong>
+          by {{ book.author.name }}
+          {% if book.publication_year %}
+            ({{ book.publication_year }})
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <p>
+    <a href="/add_author">Add Author</a> | <a href="/add_book">Add Book</a>
+  </p>
+
+</body>
 </html>
