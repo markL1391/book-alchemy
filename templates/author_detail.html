@@ -2,17 +2,40 @@
 {% block title %}{{ author.name }}{% endblock %}
 
 {% block content %}
-  <p><a href="{{ url_for('home') }}">← Back to Library</a></p>
+  <p>
+    <a href="{{ url_for('home', q=request.args.get('q', ''), sort=request.args.get('sort', 'title')) }}">
+      ← Back to Library
+    </a>
+  </p>
 
-  <div class="book" style="max-width: 800px; margin: 0 auto;">
-    <h2 style="margin-top: 0;">{{ author.name }}</h2>
+  <div class="book" style="max-width: 900px; margin: 0 auto; gap: 18px;">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px;">
+      <div>
+        <h2 style="margin: 0 0 6px 0;">{{ author.name }}</h2>
 
-    <p style="color: #6f6f6f;">
-      {% if author.birth_date %}<strong>Born:</strong> {{ author.birth_date }}{% endif %}
-      {% if author.date_of_death %} · <strong>Died:</strong> {{ author.date_of_death }}{% endif %}
-    </p>
+        <p style="color: #6f6f6f; margin: 0;">
+          {% if author.birth_date %}<strong>Born:</strong> {{ author.birth_date }}{% endif %}
+          {% if author.date_of_death %} · <strong>Died:</strong> {{ author.date_of_death }}{% endif %}
+        </p>
+      </div>
 
-    <h3>Books in your library</h3>
+      <!-- Delete Author -->
+      <form
+        action="{{ url_for('delete_author', author_id=author.id, q=request.args.get('q', ''), sort=request.args.get('sort', 'title')) }}"
+        method="POST"
+        style="margin:0;"
+      >
+        <button
+          type="submit"
+          onclick="return confirm('Delete this author and ALL related books?');"
+          style="white-space:nowrap;"
+        >
+          Delete Author
+        </button>
+      </form>
+    </div>
+
+    <h3 style="margin: 18px 0 0 0;">Books in your library</h3>
 
     {% if author.books|length == 0 %}
       <p>No books found for this author.</p>
@@ -31,9 +54,17 @@
             <strong>
               <a href="{{ url_for('book_detail', book_id=book.id) }}">{{ book.title }}</a>
             </strong>
+
             {% if book.publication_year %}
               <br><small>{{ book.publication_year }}</small>
             {% endif %}
+
+            <!-- Optional: delete book from here too -->
+            <form action="{{ url_for('delete_book', book_id=book.id) }}" method="POST" style="margin-top: 12px;">
+              <button type="submit" onclick="return confirm('Delete this book?');">
+                Delete Book
+              </button>
+            </form>
           </li>
         {% endfor %}
       </ul>
