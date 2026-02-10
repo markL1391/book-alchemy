@@ -78,9 +78,14 @@
 
         <!-- Author -->
         <small>
-          <a href="{{ url_for('author_detail', author_id=book.author.id) }}">
-            {{ book.author.name }}
-          </a>
+          <a href="{{ url_for('author_detail', author_id=book.author.id) }}">{{ book.author.name }}</a>
+
+<form action="{{ url_for('delete_author', author_id=book.author.id, sort=sort_key, q=q) }}"
+      method="POST" style="display:inline;">
+  <button type="submit" onclick="return confirm('Delete this author and ALL related books?');">
+    Delete Author
+  </button>
+</form>
           {% if book.publication_year %}
             · {{ book.publication_year }}
           {% endif %}
