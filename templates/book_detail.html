@@ -1,28 +1,69 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>{{ book.title }}</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}{{ book.title }}{% endblock %}
 
-  <p><a href="{{ url_for('home') }}">← Back to library</a></p>
-
-  <h1>{{ book.title }}</h1>
-
+{% block content %}
   <p>
-    by {{ book.author.name }}
-    {% if book.publication_year %}
-      ({{ book.publication_year }})
-    {% endif %}
+    <a href="{{ url_for('home', q=request.args.get('q', ''), sort=request.args.get('sort', 'title')) }}">
+      ← Back to library
+    </a>
   </p>
 
- {% if book.summary %}
-  <h3>Summary</h3>
-  <p>{{ book.summary }}</p>
-{% else %}
-  <p><em>No summary available.</em></p>
-{% endif %}
+  <div class="book" style="max-width: 900px; margin: 0 auto;">
+    <div style="display:flex; gap: 22px; align-items:flex-start; flex-wrap:wrap;">
 
-</body>
-</html>
+      <!-- Cover -->
+      <div style="flex: 0 0 180px;">
+        {% if book.isbn %}
+          <img
+            src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-L.jpg?default=false"
+            alt="Cover for {{ book.title }}"
+            style="height: 240px; width: 180px; object-fit: contain;"
+            onerror="this.onerror=null; this.src='https://books.google.com/books/content?vid=ISBN{{ book.isbn }}&printsec=frontcover&img=1&zoom=1';"
+          >
+        {% else %}
+          <div style="height:240px; width:180px; border:1px solid var(--border); border-radius:16px; display:flex; align-items:center; justify-content:center; color:var(--muted);">
+            No cover
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Info -->
+      <div style="flex: 1; min-width: 260px;">
+        <h2 style="margin: 0 0 8px 0;">{{ book.title }}</h2>
+
+        <p style="color: var(--muted); margin: 0 0 14px 0;">
+          by
+          <a href="{{ url_for('author_detail', author_id=book.author.id) }}">{{ book.author.name }}</a>
+          {% if book.publication_year %}
+            · {{ book.publication_year }}
+          {% endif %}
+        </p>
+
+        <p style="margin: 0 0 18px 0; color: var(--muted); font-size: 0.92rem;">
+          {% if book.isbn %}<strong>ISBN:</strong> {{ book.isbn }}{% endif %}
+        </p>
+
+        <!-- Optional: delete book -->
+        <form action="{{ url_for('delete_book', book_id=book.id) }}" method="POST" style="margin:0;">
+          <button type="submit" onclick="return confirm('Delete this book?');">
+            Delete Book
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid var(--border); margin: 22px 0;">
+
+    <!-- Summary -->
+    {% if book.summary %}
+      <h3 style="margin: 0 0 10px 0;">Summary</h3>
+      <p style="margin: 0; line-height: 1.6; white-space: pre-line;">
+        {{ book.summary }}
+      </p>
+    {% else %}
+      <p style="margin: 0; color: var(--muted);">
+        <em>No summary available.</em>
+      </p>
+    {% endif %}
+  </div>
+{% endblock %}
