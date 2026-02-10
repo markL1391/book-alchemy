@@ -3,6 +3,9 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 class Author(db.Model):
+    """
+    Author model storing basic life dates and related books.
+    """
     __tablename__ = 'authors'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -23,6 +26,9 @@ class Author(db.Model):
         return f"{self.name}"
 
 class Book(db.Model):
+    """
+    Book model storing ISBN, title, year, optional summary, and author link.
+    """
     __tablename__ = 'books'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
