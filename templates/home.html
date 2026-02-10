@@ -13,41 +13,46 @@
   {% endif %}
 {% endwith %}
 
-<!-- Search -->
-<form action="{{ url_for('home') }}" method="GET" style="margin-bottom: 16px;">
-  <input
-    type="text"
-    name="q"
-    placeholder="Search title or author…"
-    value="{{ q or '' }}"
-  >
-  <input type="hidden" name="sort" value="{{ sort_key or 'title' }}">
-  <button type="submit">Search</button>
+<!-- Controls: Search + Sort -->
+<div class="controls">
 
-  {% if q %}
-    <a href="{{ url_for('home', sort=sort_key or 'title') }}">Clear</a>
-  {% endif %}
-</form>
+  <!-- Search -->
+  <form action="{{ url_for('home') }}" method="GET">
+    <input
+      type="text"
+      name="q"
+      placeholder="Search title or author…"
+      value="{{ q or '' }}"
+    >
+    <input type="hidden" name="sort" value="{{ sort_key or 'title' }}">
+    <button type="submit">Search</button>
+
+    {% if q %}
+      <a href="{{ url_for('home', sort=sort_key or 'title') }}">Clear</a>
+    {% endif %}
+  </form>
+
+  <!-- Sort -->
+  <div class="sort">
+    Sort:
+    {% if sort_key == "title" %}
+      <strong>Title</strong>
+    {% else %}
+      <a href="{{ url_for('home', sort='title', q=q) }}">Title</a>
+    {% endif %}
+    ·
+    {% if sort_key == "author" %}
+      <strong>Author</strong>
+    {% else %}
+      <a href="{{ url_for('home', sort='author', q=q) }}">Author</a>
+    {% endif %}
+  </div>
+
+</div>
 
 {% if q and books|length == 0 %}
   <p>No books match “{{ q }}”.</p>
 {% endif %}
-
-<!-- Sort -->
-<p>
-  Sort:
-  {% if sort_key == "title" %}
-    <strong>Title</strong>
-  {% else %}
-    <a href="{{ url_for('home', sort='title', q=q) }}">Title</a>
-  {% endif %}
-  |
-  {% if sort_key == "author" %}
-    <strong>Author</strong>
-  {% else %}
-    <a href="{{ url_for('home', sort='author', q=q) }}">Author</a>
-  {% endif %}
-</p>
 
 {% if books|length == 0 %}
   <p>No books found. Add some books first.</p>
@@ -55,6 +60,7 @@
   <ul class="books">
     {% for book in books %}
       <li class="book">
+
         {% if book.isbn %}
           <img
             src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg?default=false"
@@ -63,9 +69,18 @@
           >
         {% endif %}
 
-        <strong>{{ book.title }}</strong><br>
+        <!-- Title -->
+        <strong>
+          <a href="{{ url_for('book_detail', book_id=book.id) }}">
+            {{ book.title }}
+          </a>
+        </strong>
+
+        <!-- Author -->
         <small>
-          {{ book.author.name }}
+          <a href="{{ url_for('author_detail', author_id=book.author.id) }}">
+            {{ book.author.name }}
+          </a>
           {% if book.publication_year %}
             · {{ book.publication_year }}
           {% endif %}
@@ -75,7 +90,6 @@
         <form
           action="{{ url_for('delete_book', book_id=book.id) }}"
           method="POST"
-          style="margin-top: 10px;"
         >
           <button
             type="submit"
@@ -84,6 +98,7 @@
             Delete
           </button>
         </form>
+
       </li>
     {% endfor %}
   </ul>

@@ -3,7 +3,13 @@ import os
 from sqlalchemy.exc import IntegrityError
 from data_models import db, Author, Book
 from datetime import datetime
+import requests
 
+SESSION = requests.Session()
+SESSION.headers.update({
+    "User-Agent": "BookAlchemy/1.0 (academic project)",
+    "Accept": "application/json",
+})
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
@@ -22,6 +28,61 @@ def parse_date(date_str: str):
     if not date_str:
         return None
     return datetime.strptime(date_str, "%Y-%m-%d").date()
+
+def fetch_summary_by_isbn(isbn: str) -> str | None:
+    isbn = (isbn or "").replace("-", "").strip()
+    if not isbn:
+        return None
+
+    def extract_description(obj) -> str | None:
+        desc = obj.get("description")
+        if isinstance(desc, str) and desc.strip():
+            return desc.strip()
+        if isinstance(desc, dict):
+            val = (desc.get("value") or "").strip()
+            return val if val else None
+        return None
+
+    ed_url = f"https://openlibrary.org/isbn/{isbn}.json"
+    r = SESSION.get(ed_url, timeout=8)
+
+    print("ED STATUS:", r.status_code, "URL:", ed_url)
+    if r.status_code != 200:
+        print("ED BODY:", r.text[:200])
+        return None
+
+    edition = r.json()
+    print("ED KEYS:", list(edition.keys())[:15])
+
+    desc = extract_description(edition)
+    print("ED DESC:", (desc[:80] + "...") if desc else None)
+    if desc:
+        return desc
+
+    works = edition.get("works") or []
+    print("ED WORKS:", works)
+
+    if works and isinstance(works, list) and "key" in works[0]:
+        work_key = works[0]["key"]
+        w_url = f"https://openlibrary.org{work_key}.json"
+        wr = SESSION.get(w_url, timeout=8)
+
+        print("WORK STATUS:", wr.status_code, "URL:", w_url)
+        if wr.status_code != 200:
+            print("WORK BODY:", wr.text[:200])
+            return None
+
+        work = wr.json()
+        print("WORK KEYS:", list(work.keys())[:15])
+
+        wdesc = extract_description(work)
+        print("WORK DESC:", (wdesc[:80] + "...") if wdesc else None)
+        return wdesc
+
+    return None
+
+def create_app():
+    return app
 
 @app.route("/")
 def home():
@@ -97,13 +158,19 @@ def add_book():
             author_id = int(author_id_str)
         except ValueError:
             message = "Publication year and author must be valid numbers."
-            return render_template("add_book.html", message=message, authors=authors)
+            return render_template("add_book.html", message=message, authors=authors, current_year=datetime.now().year)
+
+        current_year = datetime.now().year
+        if publication_year < 0 or publication_year > current_year:
+            message = f"Publication year must be between 0 and {current_year}."
+            return render_template("add_book.html", message=message, authors=authors, current_year=current_year)
 
         new_book = Book(
             title=title,
             isbn=isbn,
             publication_year=publication_year,
-            author_id=author_id
+            author_id=author_id,
+            summary=fetch_summary_by_isbn(isbn)
         )
 
         db.session.add(new_book)
@@ -114,7 +181,9 @@ def add_book():
         except IntegrityError:
             db.session.rollback()
             message = "This ISBN already exists. Please use a unique ISBN."
-    return render_template("add_book.html", message=message, authors=authors)
+
+    return render_template("add_book.html", message=message, authors=authors, current_year=datetime.now().year)
+
 
 @app.route("/sort/<sort_key>")
 def sort_books(sort_key):
@@ -136,6 +205,28 @@ def delete_book(book_id):
 
     flash(f"Book '{book.title}' was deleted successfully ♻️", "success")
     return redirect(url_for("home"))
+
+@app.route("/book/<int:book_id>")
+def book_detail(book_id):
+    book = Book.query.get_or_404(book_id)
+    return render_template("book_detail.html", book=book)
+
+def extract_summary(data: dict) -> str | None:
+    desc = data.get("description")
+
+    if isinstance(desc, str):
+        return desc.strip()
+
+    if isinstance(desc, dict):
+        return desc.get("value", "").strip()
+
+    return None
+
+
+@app.route("/author/<int:author_id>")
+def author_detail(author_id):
+    author = Author.query.get_or_404(author_id)
+    return render_template("author_detail.html", author=author)
 
 if __name__ == "__main__":
     with app.app_context():

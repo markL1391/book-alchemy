@@ -1,43 +1,102 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Add Book</title>
-  </head>
-  <body>
+{% extends "base.html" %}
+{% block title %}Add Book · My Library{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('home') }}" class="back">← Back to library</a>
+
+<div class="panel">
+  <h2>Add a book</h2>
+  <p class="muted">Tip: use an ISBN to fetch cover + (sometimes) a summary.</p>
 
   {% if message %}
-    <p><strong>{{ message }}</strong></p>
+    <div class="flash">{{ message }}</div>
   {% endif %}
 
   {% if authors|length == 0 %}
-    <p>No authors found. Please add an author first.</p>
+    <p class="muted"><strong>No authors found.</strong> Please add an author first.</p>
+    <div class="actions">
+      <a class="ghost" href="{{ url_for('add_author') }}">Add author</a>
+    </div>
   {% else %}
-    <form action="/add_book" method="POST">
 
-      <label for="title">Book Title:</label>
-      <input type="text" id="title" name="title" required><br><br>
+  <form class="form" action="{{ url_for('add_book') }}" method="POST">
+    <label>
+      <span>Title</span>
+      <input type="text" name="title" placeholder="e.g., 1984" required>
+    </label>
 
-      <label for="isbn">ISBN:</label>
-      <input type="text" id="isbn" name="isbn" required><br><br>
+    <div class="row">
+      <label>
+        <span>ISBN</span>
+        <input type="text" name="isbn" placeholder="e.g., 9780451524935" required>
+      </label>
 
-      <label for="publication_year">Publication Year:</label>
-        <input type="number" id="publication_year" name="publication_year" required><br><br>
+      <label>
+        <span>Publication year</span>
+        <input
+          type="number"
+          name="publication_year"
+          placeholder="e.g., 1949"
+          min="1400"
+          max="{{ current_year }}"
+          required
+        >
+        <small class="hint">Allowed: 1400–{{ current_year }}</small>
+      </label>
+    </div>
 
-      <label for="author_id">Author:</label>
-      <select id="author_id" name="author_id" required>
-        <option value="">-- Select Author --</option>
+    <label>
+      <span>Author</span>
+      <select name="author_id" required>
+        <option value="">— Select author —</option>
         {% for author in authors %}
           <option value="{{ author.id }}">{{ author.name }}</option>
         {% endfor %}
-      </select><br><br>
+      </select>
+    </label>
 
-      <input type="submit" value="Add Book">
+    <div class="actions">
+      <button type="submit">Add book</button>
+      <a class="ghost" href="{{ url_for('home') }}">Cancel</a>
+    </div>
+  </form>
 
-    </form>
   {% endif %}
+</div>
 
-  </body>
-</html>
+<style>
+  .back { display:inline-block; margin-bottom: 16px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    max-width: 720px;
+  }
+  .panel h2 { margin: 0 0 6px; font-size: 1.25rem; }
+  .muted { margin: 0 0 18px; color: var(--muted); }
+  .hint { display:block; margin-top: 6px; color: var(--muted); font-size: 0.85rem; }
+  .form { display: flex; flex-direction: column; gap: 14px; }
+  label span { display:block; font-size: 0.9rem; color: var(--muted); margin-bottom: 6px; }
+  input[type="date"], input[type="text"], input[type="number"], select {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 0.95rem;
+    width: 100%;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+  .actions { display:flex; gap: 10px; align-items:center; margin-top: 8px; }
+  .ghost {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: transparent;
+  }
+  .ghost:hover { background: #fafafa; }
+</style>
+{% endblock %}

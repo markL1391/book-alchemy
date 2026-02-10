@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ book.title }}</title>
+</head>
+<body>
+
+  <p><a href="{{ url_for('home') }}">← Back to library</a></p>
+
+  <h1>{{ book.title }}</h1>
+
+  <p>
+    by {{ book.author.name }}
+    {% if book.publication_year %}
+      ({{ book.publication_year }})
+    {% endif %}
+  </p>
+
+ {% if book.summary %}
+  <h3>Summary</h3>
+  <p>{{ book.summary }}</p>
+{% else %}
+  <p><em>No summary available.</em></p>
+{% endif %}
+
+</body>
+</html>

@@ -1,26 +1,74 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  </head>
-  <body>
+{% extends "base.html" %}
+{% block title %}Add Author · My Library{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('home') }}" class="back">← Back to library</a>
+
+<div class="panel">
+  <h2>Add an author</h2>
+  <p class="muted">Authors are required because each book references an author.</p>
 
   {% if message %}
-  <p><strong>{{ message }}</strong></p>
+    <div class="flash">{{ message }}</div>
   {% endif %}
 
-  <form action="/add_author" method="POST">
-  <label for="name">Author Name:</label>
-  <input type="text" id="name" name="name" required><br><br>
+  <form class="form" action="{{ url_for('add_author') }}" method="POST">
+    <label>
+      <span>Author name</span>
+      <input type="text" name="name" placeholder="e.g., Virginia Woolf" required>
+    </label>
 
-  <label for="birth_date">Birthdate:</label>
-  <input type="date" id="birth_date" name="birth_date" required><br><br>
-  <label for="date_of_death">Date of Death:</label>
-  <input type="date" id="date_of_death" name="date_of_death"><br><br>
-  <input type="submit" value="Add Author">
+    <div class="row">
+      <label>
+        <span>Birth date</span>
+        <input type="date" name="birth_date" required>
+      </label>
+
+      <label>
+        <span>Date of death (optional)</span>
+        <input type="date" name="date_of_death">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button type="submit">Add author</button>
+      <a class="ghost" href="{{ url_for('home') }}">Cancel</a>
+    </div>
   </form>
+</div>
 
-  </body>
-</html>
+<style>
+  .back { display:inline-block; margin-bottom: 16px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    max-width: 720px;
+  }
+  .panel h2 { margin: 0 0 6px; font-size: 1.25rem; }
+  .muted { margin: 0 0 18px; color: var(--muted); }
+  .form { display: flex; flex-direction: column; gap: 14px; }
+  label span { display:block; font-size: 0.9rem; color: var(--muted); margin-bottom: 6px; }
+  input[type="date"], input[type="text"], input[type="number"], select {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 0.95rem;
+    width: 100%;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+  .actions { display:flex; gap: 10px; align-items:center; margin-top: 8px; }
+  .ghost {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: transparent;
+  }
+  .ghost:hover { background: #fafafa; }
+</style>
+{% endblock %}
