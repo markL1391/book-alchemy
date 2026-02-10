@@ -1,86 +1,97 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Library</title>
-</head>
-<body>
+{% extends "base.html" %}
 
-  <h1>My Library</h1>
+{% block title %}Library{% endblock %}
 
-  <!-- Flash messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
+{% block content %}
+
+<!-- Flash messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-    <ul>
-      {% for category, message in messages %}
-        <li><strong>{{ message }}</strong></li>
-      {% endfor %}
-    </ul>
+    {% for category, message in messages %}
+      <div class="flash">{{ message }}</div>
+    {% endfor %}
   {% endif %}
 {% endwith %}
 
-  <!-- Search -->
-  <form action="/" method="GET" style="margin-bottom: 16px;">
-    <input type="text" name="q" placeholder="Search title or author..." value="{{ q or '' }}">
-    <input type="hidden" name="sort" value="{{ sort_key or 'title' }}">
-    <button type="submit">Search</button>
-    {% if q %}
-      <a href="/?sort={{ sort_key or 'title' }}">Clear</a>
-    {% endif %}
-  </form>
+<!-- Search -->
+<form action="{{ url_for('home') }}" method="GET" style="margin-bottom: 16px;">
+  <input
+    type="text"
+    name="q"
+    placeholder="Search title or author…"
+    value="{{ q or '' }}"
+  >
+  <input type="hidden" name="sort" value="{{ sort_key or 'title' }}">
+  <button type="submit">Search</button>
 
-  {% if q and books|length == 0 %}
-    <p>No books match “{{ q }}”.</p>
+  {% if q %}
+    <a href="{{ url_for('home', sort=sort_key or 'title') }}">Clear</a>
   {% endif %}
-
-  <!-- Sort -->
-  <p>
-    Sort:
-    {% if sort_key == "title" %}
-      <strong>Title</strong>
-    {% else %}
-      <a href="/?sort=title{% if q %}&q={{ q }}{% endif %}">Title</a>
-    {% endif %}
-    |
-    {% if sort_key == "author" %}
-      <strong>Author</strong>
-    {% else %}
-      <a href="/?sort=author{% if q %}&q={{ q }}{% endif %}">Author</a>
-    {% endif %}
-  </p>
-
-  {% if books|length == 0 %}
-    <p>No books found. Add some books first.</p>
-  {% else %}
-    <ul>
-      {% for book in books %}
-        <li style="margin-bottom: 16px;">
-          {% if book.isbn %}
-            <img
-              src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg?default=false"
-              alt="Cover for {{ book.title }}"
-              style="height: 120px; vertical-align: middle; margin-right: 12px;"
-              onerror="this.onerror=null; this.src='https://books.google.com/books/content?vid=ISBN{{ book.isbn }}&printsec=frontcover&img=1&zoom=1';"
-            >
-          {% endif %}
-
-          <strong>{{ book.title }}</strong>
-          by {{ book.author.name }}
-          {% if book.publication_year %}
-            ({{ book.publication_year }})
-          {% endif %}
-           <form action="/book/{{ book.id }}/delete" method="POST" style="display:inline;">
-  <button type="submit" onclick="return confirm('Delete {{ book.title }}?')">Delete</button>
 </form>
-        </li>
-      {% endfor %}
-    </ul>
+
+{% if q and books|length == 0 %}
+  <p>No books match “{{ q }}”.</p>
+{% endif %}
+
+<!-- Sort -->
+<p>
+  Sort:
+  {% if sort_key == "title" %}
+    <strong>Title</strong>
+  {% else %}
+    <a href="{{ url_for('home', sort='title', q=q) }}">Title</a>
   {% endif %}
+  |
+  {% if sort_key == "author" %}
+    <strong>Author</strong>
+  {% else %}
+    <a href="{{ url_for('home', sort='author', q=q) }}">Author</a>
+  {% endif %}
+</p>
 
-  <p>
-    <a href="/add_author">Add Author</a> | <a href="/add_book">Add Book</a>
-  </p>
+{% if books|length == 0 %}
+  <p>No books found. Add some books first.</p>
+{% else %}
+  <ul class="books">
+    {% for book in books %}
+      <li class="book">
+        {% if book.isbn %}
+          <img
+            src="https://covers.openlibrary.org/b/isbn/{{ book.isbn }}-M.jpg?default=false"
+            alt="Cover for {{ book.title }}"
+            onerror="this.onerror=null; this.src='https://books.google.com/books/content?vid=ISBN{{ book.isbn }}&printsec=frontcover&img=1&zoom=1';"
+          >
+        {% endif %}
 
-</body>
-</html>
+        <strong>{{ book.title }}</strong><br>
+        <small>
+          {{ book.author.name }}
+          {% if book.publication_year %}
+            · {{ book.publication_year }}
+          {% endif %}
+        </small>
+
+        <!-- Delete -->
+        <form
+          action="{{ url_for('delete_book', book_id=book.id) }}"
+          method="POST"
+          style="margin-top: 10px;"
+        >
+          <button
+            type="submit"
+            onclick="return confirm('Delete {{ book.title }}?')"
+          >
+            Delete
+          </button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<p style="margin-top: 30px;">
+  <a href="{{ url_for('add_author') }}">Add Author</a> ·
+  <a href="{{ url_for('add_book') }}">Add Book</a>
+</p>
+
+{% endblock %}
