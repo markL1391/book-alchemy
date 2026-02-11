@@ -31,6 +31,10 @@ app = Flask(__name__)
 app.secret_key = "dev-secret-key"           # For flash messages (dev only).
 
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+# Ensure data directory exists so SQLite can create the DB file
+os.makedirs(os.path.join(basedir, "data"), exist_ok=True)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'data/library.sqlite')}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
