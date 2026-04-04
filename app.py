@@ -9,22 +9,15 @@ Features:
 - Fetch book summaries from Open Library by ISBN
 """
 
+import os
+from datetime import datetime
 
 from flask import Flask, request, render_template, redirect, url_for, flash
-import os
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime
-import requests
 
 from data_models import db, Author, Book
-
-
-# Reuse one HTTP session for better performance and to set consistent headers.
-SESSION = requests.Session()
-SESSION.headers.update({
-    "User-Agent": "BookAlchemy/1.0 (academic project)",
-    "Accept": "application/json",
-})
+from utils import parse_date, normalize_isbn
+from open_library_service import fetch_summary_by_isbn
 
 
 app = Flask(__name__)
@@ -37,97 +30,8 @@ os.makedirs(os.path.join(basedir, "data"), exist_ok=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'data/library.sqlite')}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 db.init_app(app)
-
-
-def parse_date(date_str: str):
-    """
-    Parse a HTML <input type="date"> ('YYYY-MM-DD') into a datetime.date.
-
-    Returns:
-         datetime.date or None.
-    """
-    date_str = (date_str or "").strip()
-    if not date_str:
-        return None
-    return datetime.strptime(date_str, "%Y-%m-%d").date()
-
-
-def normalize_isbn(isbn: str) -> str:
-    """
-    Normalize ISBN input by removing hyphens and spaces.
-    """
-    return (isbn or "").replace("-", "").replace(" ", "").strip()
-
-def extract_summary(data: dict) -> str | None:
-    """
-    Extracts a book summary from an Open Library JSON object.
-    The Open Library API may return the "description" field either as a plain
-    string or as a dictionary containing a "value" key. This function handles
-    both cases and returns a cleaned summary string if available.
-
-    Args:
-         data (dict): JSON data returned by the Open Library API.
-
-    Returns:
-        str or None: The extracted summary text, or None if no summary exists.
-    """
-    desc = data.get("description")
-
-    if isinstance(desc, str):
-        desc = desc.strip()
-        return desc if desc else None
-
-    if isinstance(desc, dict):
-        val = (desc.get("value") or "").strip()
-        return val if val else None
-
-    return None
-
-def fetch_summary_by_isbn(isbn: str) -> str | None:
-    """
-    Fetch a book summary from Open Library using ISBN.
-
-    Strategy:
-    1) Try edition endpoint: (/isbn/{isbn}.json)
-    2) If missing, fallback to the linked Work: /works/{id}.json
-    """
-    isbn = normalize_isbn(isbn)
-    if not isbn:
-        return None
-
-    # --- 1) Edition ---
-    ed_url = f"https://openlibrary.org/isbn/{isbn}.json"
-    try:
-        r = SESSION.get(ed_url, timeout=8)
-        if r.status_code != 200:
-            return None
-
-        edition = r.json()
-    except (requests.RequestException, ValueError):
-        return None
-
-    summary = extract_summary(edition)
-    if summary:
-        return summary
-
-    # --- 2) Work fallback ---
-    works = edition.get("works") or []
-    if works and isinstance(works, list) and isinstance(works[0], dict) and "key" in works[0]:
-        work_key = works[0]["key"]
-        w_url = f"https://openlibrary.org{work_key}.json"
-        try:
-            wr = SESSION.get(w_url, timeout=8)
-            if wr.status_code != 200:
-                return None
-            work = wr.json()
-        except (requests.RequestException, ValueError):
-            return None
-
-        return extract_summary(work)
-
-    return None
-
 
 def create_app():
     """
@@ -143,29 +47,34 @@ def home():
     - search by title or author via ?q=
     - sorting via ?sort=title|author
     """
-    q = request.args.get("q", "").strip()
+    search_query = request.args.get("q", "").strip()
     sort_key = request.args.get("sort", "title").strip()
 
-    base_query = Book.query.join(Author)
+    book_query = Book.query.join(Author)
 
     # Optional search filter.
-    if q:
-        like = f"%{q}%"
-        base_query = base_query.filter(
-            (Book.title.ilike(like)) | (Author.name.ilike(like))
+    if search_query:
+        search_pattern = f"%{search_query}%"
+        book_query = book_query.filter(
+            (Book.title.ilike(search_pattern)) | (Author.name.ilike(search_pattern))
         )
 
     # Sorting.
     if sort_key == "author":
-        books = base_query.order_by(
+        books = book_query.order_by(
             Author.name.asc(),
             Book.title.asc()
         ).all()
     else:
         sort_key = "title"
-        books = base_query.order_by(Book.title.asc()).all()
+        books = book_query.order_by(Book.title.asc()).all()
 
-    return render_template("home.html", books=books, q=q, sort_key=sort_key)
+    return render_template(
+        "home.html",
+        books=books,
+        q=search_query,
+        sort_key=sort_key
+    )
 
 
 @app.route("/add_author", methods=["GET", "POST"])
@@ -177,29 +86,55 @@ def add_author():
 
     if request.method == "POST":
         # --- Read and validate form ---
-        name = request.form.get("name", "").strip()
-        birth_date_str = request.form.get("birth_date", "").strip()
-        date_of_death_str = request.form.get("date_of_death", "").strip()
+        author_name = request.form.get("name", "").strip()
+        birth_date_input = request.form.get("birth_date", "").strip()
+        date_of_death_input = request.form.get("date_of_death", "").strip()
 
-        if not name or not birth_date_str:
+        if not author_name or not birth_date_input:
             message = "Please fill in at least name and birth date."
             return render_template("add_author.html", message=message)
 
         # --- Parse dates ---
-        birth_date = parse_date(birth_date_str)
-        date_of_death = parse_date(date_of_death_str)
+        try:
+            birth_date = parse_date(birth_date_input)
+            date_of_death = parse_date(date_of_death_input)
+        except ValueError:
+            message = "Please enter valid dates."
+            return  render_template("add_author.html", message=message)
+
+        today = datetime.now().date()
+
+        if birth_date is None:
+            message = "Birth date is required."
+            return render_template("add_author.html", message=message)
+
+        if birth_date > today:
+            message = "Birth date cannot be in the future."
+            return render_template("add_author.html", message=message)
+
+        if date_of_death and date_of_death > today:
+            message = "Date of death cannot be in the future."
+            return render_template("add_author.html", message=message)
+
+        if date_of_death and date_of_death < birth_date:
+            message = "Date of death cannot be before birth date."
+            return render_template("add_author.html", message=message)
 
         # --- Persist ---
         new_author = Author(
-            name=name,
+            name=author_name,
             birth_date=birth_date,
-            date_of_death=date_of_death if date_of_death else None
+            date_of_death=date_of_death
         )
 
         db.session.add(new_author)
-        db.session.commit()
 
-        message = f"Author '{new_author.name}' was added successfully ✅"
+        try:
+            db.session.commit()
+            message = f"Author '{new_author.name}' was added successfully ✅"
+        except Exception:
+            db.session.rollback()
+            message = "Something went wrong while adding the author."
 
     return render_template("add_author.html", message=message)
 
@@ -221,36 +156,62 @@ def add_book():
 
     if request.method == "POST":
         # --- Read and normalize from data ---
-        title = request.form.get("title", "").strip()
-        isbn = request.form.get("isbn", "").strip()
-        publication_year_str = request.form.get("publication_year", "").strip()
-        author_id_str = request.form.get("author_id", "").strip()
+        book_title = request.form.get("title", "").strip()
+        raw_isbn = request.form.get("isbn", "").strip()
+        normalized_isbn = normalize_isbn(raw_isbn)
+        publication_year_input = request.form.get("publication_year", "").strip()
+        author_id_input = request.form.get("author_id", "").strip()
 
         # --- Required fields ---
-        if not title or not isbn or not publication_year_str or not author_id_str:
+        if not book_title or not normalized_isbn or not publication_year_input or not author_id_input:
             message = "Please fill in title, ISBN, publication year, and choose an author."
-            return render_template("add_book.html", message=message, authors=authors, current_year=current_year)
+            return render_template(
+                "add_book.html",
+                message=message,
+                authors=authors,
+                current_year=current_year
+            )
 
         # --- Cast to int ---
         try:
-            publication_year = int(publication_year_str)
-            author_id = int(author_id_str)
+            publication_year = int(publication_year_input)
+            author_id = int(author_id_input)
         except ValueError:
             message = "Publication year and author must be valid numbers."
-            return render_template("add_book.html", message=message, authors=authors, current_year=current_year)
+            return render_template(
+                "add_book.html",
+                message=message,
+                authors=authors,
+                current_year=current_year
+            )
 
         # --- Validate year range ---
         if publication_year < 0 or publication_year > current_year:
             message = f"Publication year must be between 0 and {current_year}."
-            return render_template("add_book.html", message=message, authors=authors, current_year=current_year)
+            return render_template(
+                "add_book.html",
+                message=message,
+                authors=authors,
+                current_year=current_year
+            )
+
+        # --- Validate digits of ISBN ---
+        if len(normalized_isbn) not in (10, 13):
+            message = "ISBN must be 10 or 13 digits."
+            return render_template(
+                "add_book.html",
+                message=message,
+                authors=authors,
+                current_year=current_year
+            )
 
         # --- Create and persist
         new_book = Book(
-            title=title,
-            isbn=isbn,
+            title=book_title,
+            isbn=normalized_isbn,
             publication_year=publication_year,
             author_id=author_id,
-            summary=fetch_summary_by_isbn(isbn)
+            summary=fetch_summary_by_isbn(normalized_isbn)
         )
 
         db.session.add(new_book)
@@ -261,8 +222,16 @@ def add_book():
         except IntegrityError:
             db.session.rollback()
             message = "This ISBN already exists. Please use a unique ISBN."
+        except Exception:
+            db.session.rollback()
+            message = "Something went wrong while adding the book."
 
-    return render_template("add_book.html", message=message, authors=authors, current_year=current_year)
+    return render_template(
+        "add_book.html",
+        message=message,
+        authors=authors,
+        current_year=current_year
+    )
 
 
 @app.route("/sort/<sort_key>")
@@ -270,8 +239,8 @@ def sort_books(sort_key):
     """
     Redirect helper to keep sort and search parameters unified.
     """
-    q = request.args.get("q", "").strip()
-    return redirect(url_for("home", sort=sort_key, q=q))
+    search_query = request.args.get("q", "").strip()
+    return redirect(url_for("home", sort=sort_key, q=search_query))
 
 @app.route("/book/<int:book_id>/delete", methods=["POST"])
 def delete_book(book_id):
@@ -281,16 +250,22 @@ def delete_book(book_id):
     """
     book = Book.query.get_or_404(book_id)
     author = book.author
+    deleted_book_title = book.title
 
-    db.session.delete(book)
-    db.session.flush()                      # Apply deletion before counting remaining books.
+    try:
+        db.session.delete(book)
+        db.session.flush()                      # Apply deletion before counting remaining books.
 
-    if Book.query.filter_by(author_id=author.id).count() == 0:
-        db.session.delete(author)
+        remaining_books_count = Book.query.filter_by(author_id=author.id).count()
+        if remaining_books_count == 0:
+            db.session.delete(author)
 
-    db.session.commit()
+        db.session.commit()
+        flash(f"Book '{deleted_book_title}' was deleted successfully ♻️", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Something went wrong while deleting the book.", "error")
 
-    flash(f"Book '{book.title}' was deleted successfully ♻️", "success")
     return redirect(url_for("home"))
 
 @app.route("/author/<int:author_id>/delete", methods=["POST"])
@@ -299,13 +274,23 @@ def delete_author(author_id):
     Delete an author and all related books (cascade delete).
     """
     author = Author.query.get_or_404(author_id)
-    name = author.name
+    author_name = author.name
 
-    db.session.delete(author)
-    db.session.commit()
+    try:
+        db.session.delete(author)
+        db.session.commit()
+        flash(f"Author '{author_name}' and all related books were deleted successfully ♻️", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Something went wrong while deleting the author.", "error")
 
-    flash(f"Author '{name}' and all related books were deleted successfully ♻️", "success")
-    return redirect(url_for("home", sort=request.args.get("sort", "title"), q=request.args.get("q", "")))
+    return redirect(
+        url_for(
+            "home",
+            sort=request.args.get("sort", "title"),
+            q=request.args.get("q", "")
+        )
+    )
 
 @app.route("/book/<int:book_id>")
 def book_detail(book_id):
@@ -329,4 +314,4 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
 
-    app.run(debug=True)
+    app.run(debug=True, port=5050)
